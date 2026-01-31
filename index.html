@@ -3,153 +3,190 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>眼球追蹤打擊遊戲 (響應式版)</title>
+  <title>大眼球追蹤 (鏡頭右下角版)</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <style>
-    /* CSS 設定：移除邊距並隱藏捲軸，確保全螢幕顯示 */
     body {
       margin: 0;
       padding: 0;
-      overflow: hidden; /* 防止出現捲軸 */
-      background-color: #000;
+      overflow: hidden;
+      background-color: #222; /* 背景改深灰色，對比更強 */
     }
     canvas {
-      display: block; /* 移除 canvas 底部的微小間隙 */
+      display: block;
     }
   </style>
 </head>
 <body>
 
 <script>
-  // --- 遊戲變數 ---
-  let score = 0; 
-  let targetX, targetY; 
-  let targetSpeedX = 3; 
-  let targetSpeedY = 4; 
-  let targetSize = 40; // 目標稍微變大一點，方便手機點擊
+  let video;
+  let prevPixels; 
+  let motionX = 0;
+  let motionY = 0;
+  let lerpedX = 0; 
+  let lerpedY = 0; 
+  
+  let threshold = 50; 
+
+  // ★ 設定眼球大小
+  let eyeSize = 200; // 變大！(原本是 80)
+  let pupilSize = 80; // 瞳孔也跟著變大
 
   function setup() {
-    // 1. 建立一個填滿視窗的畫布
     createCanvas(windowWidth, windowHeight);
-    
+    pixelDensity(1);
     colorMode(HSB);
     angleMode(DEGREES);
+
+    video = createCapture(VIDEO);
+    video.size(320, 240);
+    video.hide();
     
-    // 初始化目標位置
-    targetX = random(width);
-    targetY = random(height);
-    
-    textAlign(CENTER, CENTER);
-    textSize(24);
-    noCursor(); // 隱藏游標
+    motionX = width / 2;
+    motionY = height / 2;
+    lerpedX = width / 2;
+    lerpedY = height / 2;
   }
 
-  // 2. 當瀏覽器視窗大小改變時，自動調整畫布
   function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
   }
 
   function draw() {
-    background(0);
-    
-    // --- 更新與繪製目標物 (蚊子) ---
-    targetX += targetSpeedX;
-    targetY += targetSpeedY;
-    
-    // 邊界反彈檢查
-    if (targetX < targetSize/2 || targetX > width - targetSize/2) {
-      targetSpeedX *= -1;
-    }
-    if (targetY < targetSize/2 || targetY > height - targetSize/2) {
-      targetSpeedY *= -1;
-    }
-    
-    // 限制目標物不要跑出畫面太遠 (響應式調整時防止卡在外面)
-    targetX = constrain(targetX, 0, width);
-    targetY = constrain(targetY, 0, height);
+    background(30); // 背景用深灰色，不要全黑，比較有質感
 
-    // 畫目標物
-    fill(0, 100, 100); 
-    noStroke();
-    circle(targetX, targetY, targetSize);
+    // --- 1. 動態偵測邏輯 (跟之前一樣，保持不變) ---
+    video.loadPixels();
+    if (video.pixels.length > 0) {
+      let totalX = 0;
+      let totalY = 0;
+      let count = 0;
+
+      if (prevPixels) {
+        for (let y = 0; y < video.height; y += 4) {
+          for (let x = 0; x < video.width; x += 4) {
+            let index = (y * video.width + x) * 4;
+            let r1 = video.pixels[index];
+            let g1 = video.pixels[index+1];
+            let b1 = video.pixels[index+2];
+            let r2 = prevPixels[index];
+            let g2 = prevPixels[index+1];
+            let b2 = prevPixels[index+2];
+            
+            let d = dist(r1, g1, b1, r2, g2, b2);
+            
+            if (d > threshold) {
+              totalX += x;
+              totalY += y;
+              count++;
+            }
+          }
+        }
+      }
+      prevPixels = new Uint8Array(video.pixels);
+
+      if (count > 20) {
+        motionX = totalX / count;
+        motionY = totalY / count;
+        motionX = map(motionX, 0, video.width, width, 0); 
+        motionY = map(motionY, 0, video.height, 0, height);
+      }
+    }
+
+    lerpedX = lerp(lerpedX, motionX, 0.1);
+    lerpedY = lerp(lerpedY, motionY, 0.1);
+
+
+    // --- 2. 繪製眼睛 (變大版) ---
     
-    // --- 繪製眼睛 (位置改為相對於螢幕中心) ---
-    
-    // 計算眼睛中心位置
     let centerX = width / 2;
     let centerY = height / 2;
-    let eyeOffset = 60; // 兩眼距離中心各 60px
-    
+    let eyeOffset = eyeSize * 0.8; // 兩眼距離隨眼睛大小調整
+
     // === 左眼 ===
-    let leftX = centerX - eyeOffset;
+    let leftX = centerX - eyeOffset/2 - 10;
     let leftY = centerY;
-    let leftAngle = atan2(targetY - leftY, targetX - leftX);
+    let leftAngle = atan2(lerpedY - leftY, lerpedX - leftX);
 
     push();
     translate(leftX, leftY);
     
-    // 眼白
+    // 眼白 (外框)
     fill(255);
-    ellipse(0, 0, 60, 60);
+    stroke(0);
+    strokeWeight(4);
+    ellipse(0, 0, eyeSize, eyeSize); 
     
-    // 眼球旋轉與瞳孔
+    // 旋轉瞳孔
     rotate(leftAngle);
+    
+    // 瞳孔
+    noStroke();
     fill(0);
-    ellipse(15, 0, 25, 25); // 15 是瞳孔偏離中心的距離
+    ellipse(eyeSize/4, 0, pupilSize, pupilSize); // 瞳孔稍微偏離中心，創造注視感
+    
+    // 眼神光 (讓眼睛有神)
+    fill(255);
+    ellipse(eyeSize/4 + 10, -15, 20, 20); 
     pop();
 
     // === 右眼 ===
-    let rightX = centerX + eyeOffset;
+    let rightX = centerX + eyeOffset/2 + 10;
     let rightY = centerY;
-    let rightAngle = atan2(targetY - rightY, targetX - rightX);
+    let rightAngle = atan2(lerpedY - rightY, lerpedX - rightX);
 
     push();
     translate(rightX, rightY);
     
-    // 眼白
     fill(255);
-    ellipse(0, 0, 60, 60);
+    stroke(0);
+    strokeWeight(4);
+    ellipse(0, 0, eyeSize, eyeSize);
     
-    // 眼球旋轉與瞳孔
     rotate(rightAngle);
-    fill(0);
-    ellipse(15, 0, 25, 25);
-    pop();
     
-    // --- 介面 UI ---
-    
-    // 分數顯示 (永遠置中上方)
-    fill(255);
     noStroke();
-    text("Score: " + score, width / 2, 50);
+    fill(0);
+    ellipse(eyeSize/4, 0, pupilSize, pupilSize);
     
-    // 自訂滑鼠游標 (準心)
+    fill(255);
+    ellipse(eyeSize/4 + 10, -15, 20, 20);
+    pop();
+
+    // --- 3. ★ 繪製右下角的小鏡頭畫面 ---
+    
+    // 設定小畫面的寬高
+    let camWidth = width * 0.25; // 螢幕寬度的 25%
+    let camHeight = (camWidth * 3) / 4; // 保持 4:3 比例
+    let margin = 20; // 邊距
+
+    // 計算位置 (右下角)
+    let camX = width - camWidth - margin;
+    let camY = height - camHeight - margin;
+
+    // 畫一個外框給鏡頭畫面
     stroke(255);
     strokeWeight(2);
     noFill();
-    circle(mouseX, mouseY, 25);
-    line(mouseX - 15, mouseY, mouseX + 15, mouseY);
-    line(mouseX, mouseY - 15, mouseX, mouseY + 15);
-  }
+    rect(camX, camY, camWidth, camHeight);
 
-  function mousePressed() {
-    // 判斷是否擊中
-    let d = dist(mouseX, mouseY, targetX, targetY);
+    // 顯示鏡頭畫面 (需要鏡像翻轉，不然方向會反)
+    push();
+    // 移動到該畫面的中心點進行翻轉，再移回去
+    translate(camX + camWidth, camY); 
+    scale(-1, 1); // 左右翻轉
+    image(video, 0, 0, camWidth, camHeight); // 這裡畫在 (0,0) 因為已經 translate 過去了
     
-    if (d < targetSize) {
-      score++;
-      
-      // 擊中後瞬移
-      targetX = random(width);
-      targetY = random(height);
-      
-      // 增加難度 (速度變快)
-      targetSpeedX *= 1.1;
-      targetSpeedY *= 1.1;
-      
-      // 稍微改變目標顏色或大小的回饋 (可選)
-      targetSize = random(30, 50);
-    }
+    // 如果有偵測到動態，在小畫面裡畫個紅點提示
+    // 我們需要把全螢幕的偵測座標 (lerpedX) 縮小映射回小畫面座標
+    let miniX = map(lerpedX, width, 0, 0, camWidth); // 注意這裡 width -> 0 是因為上面 scale(-1, 1) 翻轉過
+    let miniY = map(lerpedY, 0, height, 0, camHeight);
+    
+    fill(0, 100, 100);
+    noStroke();
+    ellipse(miniX, miniY, 10, 10);
+    pop();
   }
 </script>
 
