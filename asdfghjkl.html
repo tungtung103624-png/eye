@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>眼球追蹤打擊遊戲 (響應式版)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <style>
+    /* CSS 設定：移除邊距並隱藏捲軸，確保全螢幕顯示 */
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden; /* 防止出現捲軸 */
+      background-color: #000;
+    }
+    canvas {
+      display: block; /* 移除 canvas 底部的微小間隙 */
+    }
+  </style>
+</head>
+<body>
+
+<script>
+  // --- 遊戲變數 ---
+  let score = 0; 
+  let targetX, targetY; 
+  let targetSpeedX = 3; 
+  let targetSpeedY = 4; 
+  let targetSize = 40; // 目標稍微變大一點，方便手機點擊
+
+  function setup() {
+    // 1. 建立一個填滿視窗的畫布
+    createCanvas(windowWidth, windowHeight);
+    
+    colorMode(HSB);
+    angleMode(DEGREES);
+    
+    // 初始化目標位置
+    targetX = random(width);
+    targetY = random(height);
+    
+    textAlign(CENTER, CENTER);
+    textSize(24);
+    noCursor(); // 隱藏游標
+  }
+
+  // 2. 當瀏覽器視窗大小改變時，自動調整畫布
+  function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
+  }
+
+  function draw() {
+    background(0);
+    
+    // --- 更新與繪製目標物 (蚊子) ---
+    targetX += targetSpeedX;
+    targetY += targetSpeedY;
+    
+    // 邊界反彈檢查
+    if (targetX < targetSize/2 || targetX > width - targetSize/2) {
+      targetSpeedX *= -1;
+    }
+    if (targetY < targetSize/2 || targetY > height - targetSize/2) {
+      targetSpeedY *= -1;
+    }
+    
+    // 限制目標物不要跑出畫面太遠 (響應式調整時防止卡在外面)
+    targetX = constrain(targetX, 0, width);
+    targetY = constrain(targetY, 0, height);
+
+    // 畫目標物
+    fill(0, 100, 100); 
+    noStroke();
+    circle(targetX, targetY, targetSize);
+    
+    // --- 繪製眼睛 (位置改為相對於螢幕中心) ---
+    
+    // 計算眼睛中心位置
+    let centerX = width / 2;
+    let centerY = height / 2;
+    let eyeOffset = 60; // 兩眼距離中心各 60px
+    
+    // === 左眼 ===
+    let leftX = centerX - eyeOffset;
+    let leftY = centerY;
+    let leftAngle = atan2(targetY - leftY, targetX - leftX);
+
+    push();
+    translate(leftX, leftY);
+    
+    // 眼白
+    fill(255);
+    ellipse(0, 0, 60, 60);
+    
+    // 眼球旋轉與瞳孔
+    rotate(leftAngle);
+    fill(0);
+    ellipse(15, 0, 25, 25); // 15 是瞳孔偏離中心的距離
+    pop();
+
+    // === 右眼 ===
+    let rightX = centerX + eyeOffset;
+    let rightY = centerY;
+    let rightAngle = atan2(targetY - rightY, targetX - rightX);
+
+    push();
+    translate(rightX, rightY);
+    
+    // 眼白
+    fill(255);
+    ellipse(0, 0, 60, 60);
+    
+    // 眼球旋轉與瞳孔
+    rotate(rightAngle);
+    fill(0);
+    ellipse(15, 0, 25, 25);
+    pop();
+    
+    // --- 介面 UI ---
+    
+    // 分數顯示 (永遠置中上方)
+    fill(255);
+    noStroke();
+    text("Score: " + score, width / 2, 50);
+    
+    // 自訂滑鼠游標 (準心)
+    stroke(255);
+    strokeWeight(2);
+    noFill();
+    circle(mouseX, mouseY, 25);
+    line(mouseX - 15, mouseY, mouseX + 15, mouseY);
+    line(mouseX, mouseY - 15, mouseX, mouseY + 15);
+  }
+
+  function mousePressed() {
+    // 判斷是否擊中
+    let d = dist(mouseX, mouseY, targetX, targetY);
+    
+    if (d < targetSize) {
+      score++;
+      
+      // 擊中後瞬移
+      targetX = random(width);
+      targetY = random(height);
+      
+      // 增加難度 (速度變快)
+      targetSpeedX *= 1.1;
+      targetSpeedY *= 1.1;
+      
+      // 稍微改變目標顏色或大小的回饋 (可選)
+      targetSize = random(30, 50);
+    }
+  }
+</script>
+
+</body>
+</html>
